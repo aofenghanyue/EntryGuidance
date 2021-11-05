@@ -4,6 +4,10 @@ from entity.missile import Missile
 class Guidance:
     def __init__(self):
         super(Guidance, self).__init__()
+        self.end_flag = False
+
+    def init(self, missile: Missile, target: Missile = None, meta={}):
+        pass
 
     def one_step_guide(self, missile: Missile, target: Missile = None, meta={}):
         """
@@ -13,7 +17,7 @@ class Guidance:
         :param target: 目标对象
         :return: True代表制导成功，False代表制导结束
         """
-        if not self.end_guide(missile, target, meta):
+        if not self.end_guide(missile, target, meta) and not self.end_flag:
             if self.guide_process(missile, target, meta):
                 self.guide(missile, target, meta)
             else:
@@ -43,7 +47,7 @@ class Guidance:
         """
         return True
 
-    def end_guide(self, missile: Missile, target: Missile, meta={}):
+    def end_guide(self, missile: Missile=Missile(), target: Missile=Missile(), meta={}, flag=False):
         """
         是否结束制导
         例如已经打到目标或者达到最大制导时长，则终止制导
@@ -52,4 +56,11 @@ class Guidance:
         :param meta:
         :return:
         """
-        return False
+        if self.end_flag:
+            return True
+        ##
+        # your code at guide end
+        ##
+        if flag:
+            self.end_flag = flag
+        return self.end_flag

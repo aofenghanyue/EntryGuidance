@@ -3,8 +3,16 @@ from scipy.interpolate import interp1d, interp2d
 
 
 class Interp1:
-    def __init__(self, x, y, kind="linear"):
-        self.interp_fun = interp1d(x, y, kind=kind)
+    def __init__(self, x, y, kind="linear", bounds_error=False, fill_value='extrapolate'):
+        """
+
+        :param x: 插值的节点，横坐标
+        :param y: 插值的节点，纵坐标
+        :param kind: 插值模式{'linear', 'cubic', 'quintic'}
+        :param bounds_error: 是否允许超过x边界的自变量，设为False则可以外推
+        :param fill_value: 设置外推方式，如果不加此参数，则外推返回nan，'extrapolate'代表外推
+        """
+        self.interp_fun = interp1d(x, y, kind=kind, bounds_error=bounds_error, fill_value=fill_value)
 
     def pre(self, x):
         # x为数时返回数，x为列表时返回列表

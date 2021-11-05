@@ -13,7 +13,12 @@ class Earth:
         return v ** 2 / 2 - self.mu / (self.Re + h)
 
 
+class StaticEarth(Earth):
+    omega_e = 0
+
+
 earth = Earth()
+# earth = StaticEarth()
 
 if __name__ == '__main__':
     print(Earth.mu)

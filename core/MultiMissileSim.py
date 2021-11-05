@@ -1,52 +1,69 @@
-import settings as glbs
+# -*- coding: utf-8 -*-
+# EditTime  : 2021-09-27 19:13
+# Author    : Of yue
+# File      : MultiMissileSim.py
+# Intro     :
+from itertools import chain
+from typing import List
+
 from entity.missile import Missile
-from guidance.guide import Guidance
+from guidance.MultiGuide import MultiMissileGuidance
 from store.dataSave import DataSave
 from utils.integral import Integral
+import multiset as glbs
 
 
-class TrajectorySimulation:
+class MultiMissileSim:
     def __init__(self):
         # 最大迭代次数
         self.max_iter = getattr(glbs, "MAXITER", 0)
         # 当前迭代次数
         self.iter = 0
 
-        # 当前积分步长
-        self.h = 0
+        # 最小积分步长
+        self.min_h = getattr(glbs, "MIN_H", 1E-4)
 
         # 全局时间
         self.t = getattr(glbs, "t0", 0)
-        # 导弹与其对应目标
-        self.mis: Missile = Missile()
-        self.tar: Missile = Missile()
+
+        # 参与仿真的导弹
+        self.mis: List[Missile] = []
+        self.tar: List[Missile] = []
 
         # 制导模块
-        self.guide: Guidance = Guidance()
+        self.guide: MultiMissileGuidance = MultiMissileGuidance()
         self.guide_params_list = getattr(glbs, "ParamsToGuide", [])
-        self.guide_params: dict = {}
 
         # 积分模块
         self.integral = Integral()
 
-        # 数据存储模块 可以是列表，对应不同的导弹与目标
-        self.db = DataSave()
+        # 数据存储模块
+        self.db: List[DataSave] = []
         self.db_save_dict: dict = {}  # 每次存储值的临时字典
         self.init()
 
-    def init(self, mis=Missile(), tar=Missile(), guide=Guidance(), integ=Integral(), db=DataSave()):
+        # 其它
+        # 是否为在线临时仿真
+        self.is_main = True
+
+    def init(self, mis=[], tar=[], guide=MultiMissileGuidance(), integ=Integral(), db=[]):
         """
-        初始化导弹，目标，制导模式，积分，存储模块等信息
+        初始化导弹，目标，制导模式，积分，存储模块等信息，需重载
+        :param mis: List[Missile]
+        :param tar: List[Missile]
+        :param guide: Guidance
+        :param integ: Integral
+        :param db: List[DataSave]
         :return:
         """
         pass
 
-    def step_len(self) -> float:
+    def step_len(self):
         """
-        计算每一步的积分步长
-        :return: 当前步积分步长
+        计算每一步的积分步长，需重载
+        :return:
         """
-        pass
+        return self.min_h
 
     def simulation(self):
         self._before_simulation()
@@ -56,11 +73,10 @@ class TrajectorySimulation:
 
     def next(self):
         """
-        一个循环
+        单次仿真循环，当停止制导后自动结束
         :return:
         """
         if self._is_continue():
-            self.h = self.step_len()
             if self.one_step_guide():
                 # 此处应该先保存上一步的状态值，再改变状态
                 self.after_guide()
@@ -75,28 +91,31 @@ class TrajectorySimulation:
         :return: True代表单步制导执行成功
                 False代表制导结束
         """
-        # 产生制导相关参数
-        self.gen_guide_params()
-        # 产生制导指令
-        if self.guide.one_step_guide(self.mis, self.tar, self.guide_params):
-            return True
-        else:
-            return False
+        # 产生传入制导模块的相关参数
+        # 产生制导指令, 如果制导指令成功生成，则继续仿真
+        return self.guide.one_step_guide(self.mis, self.tar, self.guide_params())
 
     def one_step_integral(self):
         """
         2.各个体单步积分
-        :return: 
+        :return:
         """
-        self.one_step_integral_object(self.mis)
-        self.one_step_integral_object(self.tar)
+        for m in chain(self.mis, self.tar):
+            self.one_step_integral_object(m)
 
     def one_step_integral_object(self, obj: Missile):
+        # 如果时间累计大于步长，则制导一次
+        if not obj.guide["guide_process"]:
+            return False
+        if obj.guide["end_guide"]:
+            return False
         if obj.launched:
             # 如果导弹已发射则更新状态
             x, y0 = obj.status.x, obj.status.y
-            y_next, dy = self.integral.next_step(obj.equation.equation, x, y0, self.h, obj.control, need_dy=True)
-            x_next = x + self.h
+
+            temp_step_len = obj.guide.get("step_len", self.step_len())
+            y_next, dy = self.integral.next_step(obj.equation.equation, x, y0, temp_step_len, obj.control, need_dy=True)
+            x_next = x + temp_step_len
             if dy is not None:
                 obj.guide["dy"] = dy
 
@@ -105,28 +124,33 @@ class TrajectorySimulation:
             status_update_data.update({obj.status.independent_key: x_next})
             obj.status.change_stat(status_update_data)
 
-    def gen_guide_params(self):
+    def guide_params(self):
         """
         产生要传入制导模块的参数
         :return: None
         """
+        temp_guide_params = {}
         for param in self.guide_params_list:
             if param == "self":
-                self.guide_params["simulation"] = self
+                temp_guide_params["simulation"] = self
             else:
-                self.guide_params[param] = getattr(self, param, None)
+                temp_guide_params[param] = getattr(self, param, None)
+        return temp_guide_params
 
     def save_data(self) -> None:
         """
         存储数据
         :return: None
         """
-        self.db_save_dict = {"global_t": self.t}
-        # 默认只存储时间、导弹状态和控制量
-        self.db_save_dict.update(self.mis.status.status_dict())
-        self.db_save_dict.update(self.mis.control)
+        for index, (mis, db) in enumerate(zip(self.mis, self.db)):
+            # 如果此仿真周期进行了制导，则保存数据
+            if mis.guide["guide_process"] and not mis.guide["end_guide"]:
+                db_save_dict = {"global_t": self.t}
+                # 默认只存储时间、导弹状态和控制量
+                db_save_dict.update(mis.status.status_dict())
+                db_save_dict.update(mis.control)
 
-        self.db.update(self.db_save_dict)
+                db.update(db_save_dict)
 
     def _is_continue(self) -> bool:
         """判断是否继续仿真"""
@@ -153,7 +177,7 @@ class TrajectorySimulation:
         # 迭代次数+1
         self.iter += 1
         # 时间前进h
-        self.t += self.h
+        self.t += self.min_h
         self.after_one_step()
 
     def after_one_step(self):
@@ -176,5 +200,6 @@ class TrajectorySimulation:
     def after_simulation(self):
         pass
 
-    def from_mis_guide(self, param_list: list):
-        return {param: self.mis.guide.get(param, None) for param in param_list}
+    def from_mis_guide(self, mis: Missile, param_list: list):
+        return {param: mis.guide.get(param, None)
+                for param in param_list}

@@ -2,7 +2,7 @@ from dynamics.motionEquation import MotionEquation
 
 
 class Integral:
-    def next_step(self, f, x, y0, h, meta={}):
+    def next_step(self, f, x, y0, h, meta={}, need_dy=False):
         """
         单步积分
         :param f: 被积微分方程
@@ -10,6 +10,7 @@ class Integral:
         :param y0: 状态初值
         :param h: 步长
         :param meta: 附加参数
+        :param need_dy: 是否需要输出微分信息
         :return: 新状态
         """
         return y0
@@ -40,4 +41,4 @@ class RungeKutta4(Integral):
         if need_dy:
             return y_next, k1
         else:
-            return y_next
+            return y_next, None

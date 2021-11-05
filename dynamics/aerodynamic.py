@@ -1,5 +1,8 @@
 import numpy as np
 
+# 关闭新版本中对于生成ndarray没有给定dtype的警告
+np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
+
 
 class Aerodynamic:
     def __init__(self):
@@ -35,6 +38,9 @@ class AerodynamicCAVH(Aerodynamic):
              [9.25268743745020e-05, -0.00257436590032047, 0.0266344981080193, -0.131000627832209, 0.366218315445375],
              [6.05023225121903e-07, -3.43552643423171e-05, 0.000703290091255527, -0.00669225369285760,
               0.0954632512438941]])
+        # 升力系数对攻角的导数
+
+        self.CL_alpha = lambda mean_ma: self.CL_alpha_coef.dot([mean_ma ** 2, mean_ma, 1])
 
     def CL(self, ma, alpha):
         """
@@ -77,6 +83,19 @@ class AerodynamicCAVH(Aerodynamic):
     def CD(self, ma, alpha):
         _, CD = self.CLCD(ma, alpha)
         return CD
+
+    def inverse_alpha(self, CL, ma):
+        # 由马赫数与升力系数反解攻角
+        CL_alpha = self.CL_alpha_coef.dot([ma ** 2, ma, 1])
+        if ma <= 10:
+            row = 0
+        elif ma <= 19:
+            row = 1
+        else:
+            row = 2
+        CL0 = self.CL0_coef[row, :].dot([ma ** i for i in range(6)][::-1])
+
+        return (CL - CL0) / CL_alpha
 
 
 def CL(aero_model: Aerodynamic, ma, alpha):

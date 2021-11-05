@@ -33,7 +33,7 @@ class ME6D(MotionEquation):
         we = e.omega_e
         g = e.g(H)
 
-        dy = np.array([0] * len(y))
+        dy = np.array([0] * len(y), dtype=float)
         dy[0] = V * cos(gamma) * sin(psi) / (Re + H) / cos(phi)
         dy[1] = V * cos(gamma) * cos(psi) / (Re + H)
         dy[2] = V * sin(gamma)
